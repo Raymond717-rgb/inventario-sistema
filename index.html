@@ -545,6 +545,16 @@
             try {
                 updateSyncStatus('syncing', '🔄', 'Conectando...');
                 
+        async function connectToRoom() {
+            const roomId = document.getElementById('roomId').value.trim();
+            if (!roomId) {
+                notify('⚠️ Ingresa un nombre de sala');
+                return;
+            }
+            
+            try {
+                updateSyncStatus('syncing', '🔄', 'Conectando...');
+                
                 // Usar jsonbin.io como base de datos simple
                 const binId = await getOrCreateBin(roomId);
                 if (binId) {
@@ -1148,3 +1158,4 @@
     </script>
 </body>
 </html>
+
