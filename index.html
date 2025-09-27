@@ -43,7 +43,7 @@
             text-align: center;
         }
         .room-code {
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             font-weight: bold;
             color: #2c3e50;
             background: #f8f9fa;
@@ -52,8 +52,30 @@
             margin: 10px 0;
             border: 2px dashed #4ecdc4;
             cursor: pointer;
+            word-break: break-all;
+            user-select: all;
         }
         .room-code:hover { background: #e9ecef; }
+        
+        .room-input-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e9ecef;
+        }
+        .room-input {
+            width: 200px;
+            padding: 8px 12px;
+            border: 2px solid #4ecdc4;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            margin: 0 10px;
+        }
+        .room-input:focus {
+            outline: none;
+            border-color: #44a08d;
+            box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1);
+        }
         
         .controls-panel {
             background: rgba(255,255,255,0.9);
@@ -77,8 +99,10 @@
         .btn-export:hover { background: #2980b9; transform: translateY(-1px); }
         .btn-import { background: #27ae60; color: white; }
         .btn-import:hover { background: #229954; transform: translateY(-1px); }
-        .btn-sync { background: #9b59b6; color: white; }
-        .btn-sync:hover { background: #8e44ad; transform: translateY(-1px); }
+        .btn-join { background: #9b59b6; color: white; }
+        .btn-join:hover { background: #8e44ad; transform: translateY(-1px); }
+        .btn-copy { background: #f39c12; color: white; }
+        .btn-copy:hover { background: #e67e22; transform: translateY(-1px); }
         
         .summary-panel {
             background: rgba(255,255,255,0.95);
@@ -137,27 +161,6 @@
         .product-image {
             width: 100%; height: 100%; object-fit: cover; border-radius: 12px;
         }
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: none; justify-content: center;
-            align-items: center; z-index: 2000;
-        }
-        .modal-content {
-            background: white; padding: 25px; border-radius: 15px;
-            max-width: 350px; width: 90%; text-align: center;
-        }
-        .modal-title { font-size: 1.3rem; font-weight: bold; color: #2c3e50; margin-bottom: 15px; }
-        .image-upload-area {
-            border: 3px dashed #4ecdc4; border-radius: 12px; padding: 25px;
-            margin: 15px 0; cursor: pointer; background: #f8f9fa; transition: all 0.2s ease;
-        }
-        .image-upload-area:hover { border-color: #44a08d; background: #e9ecef; }
-        .upload-icon { font-size: 2.5rem; color: #4ecdc4; margin-bottom: 8px; }
-        .upload-text { color: #6c757d; font-size: 0.9rem; }
-        .image-preview { max-width: 100%; max-height: 150px; border-radius: 8px; margin: 10px 0; }
-        .modal-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
-        .btn-secondary { background: #6c757d; color: white; }
-        .btn-secondary:hover { background: #5a6268; }
         
         .edit-buttons { display: flex; gap: 6px; }
         .edit-btn {
@@ -220,30 +223,37 @@
             .products-grid { grid-template-columns: 1fr; }
             .header h1 { font-size: 2rem; }
             .summary-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+            .room-input { width: 150px; margin: 5px; }
         }
     </style>
 </head>
 <body>
     <div class="sync-status" id="syncStatus">
         <span id="syncIcon">🔄</span>
-        <span id="syncText">Conectando...</span>
+        <span id="syncText">Iniciando...</span>
     </div>
 
     <div class="container">
         <div class="header">
             <h1>📊 Control de Eficiencia</h1>
-            <p>Sincronización automática en tiempo real</p>
+            <p>Sincronización en tiempo real con Firebase</p>
         </div>
 
         <div class="room-panel">
             <div style="margin-bottom: 15px;">
-                <strong>🔗 Código de sala para compartir:</strong>
+                <strong>🔗 Tu sala de trabajo:</strong>
             </div>
             <div class="room-code" id="roomCode" onclick="copyRoomCode()">
-                Generando código...
+                Generando sala...
             </div>
-            <div style="margin-top: 10px; font-size: 0.9rem; color: #666;">
-                👆 Haz clic para copiar el código y compártelo con tu equipo
+            <button class="btn-copy" onclick="copyRoomCode()">📋 Copiar Link</button>
+            
+            <div class="room-input-section">
+                <div style="margin-bottom: 10px;">
+                    <strong>👥 Unirse a otra sala:</strong>
+                </div>
+                <input type="text" class="room-input" id="joinRoomInput" placeholder="Código de sala (ej: ABC123)">
+                <button class="btn-join" onclick="joinRoom()">🚀 Unirse</button>
             </div>
         </div>
 
@@ -277,15 +287,13 @@
             <div class="product-card product-1">
                 <div class="product-header">
                     <div class="product-left">
-                        <div class="product-icon" onclick="openImageModal(1)">
+                        <div class="product-icon" onclick="editTitle(1)">
                             <span id="icon1">🔧</span>
-                            <img id="image1" class="product-image" style="display: none;">
                         </div>
                         <div class="product-title" id="title1" onclick="editTitle(1)">Producto A</div>
                         <input type="text" class="product-title-input" id="titleInput1" style="display: none;" onblur="saveTitle(1)" onkeypress="handleKeypress(event, 1)">
                     </div>
                     <div class="edit-buttons">
-                        <button class="edit-btn" onclick="openImageModal(1)" title="Cambiar imagen">📷</button>
                         <button class="edit-btn" onclick="editTitle(1)" title="Editar nombre">✏️</button>
                     </div>
                 </div>
@@ -354,15 +362,13 @@
             <div class="product-card product-2">
                 <div class="product-header">
                     <div class="product-left">
-                        <div class="product-icon" onclick="openImageModal(2)">
+                        <div class="product-icon" onclick="editTitle(2)">
                             <span id="icon2">⚙️</span>
-                            <img id="image2" class="product-image" style="display: none;">
                         </div>
                         <div class="product-title" id="title2" onclick="editTitle(2)">Producto B</div>
                         <input type="text" class="product-title-input" id="titleInput2" style="display: none;" onblur="saveTitle(2)" onkeypress="handleKeypress(event, 2)">
                     </div>
                     <div class="edit-buttons">
-                        <button class="edit-btn" onclick="openImageModal(2)" title="Cambiar imagen">📷</button>
                         <button class="edit-btn" onclick="editTitle(2)" title="Editar nombre">✏️</button>
                     </div>
                 </div>
@@ -431,15 +437,13 @@
             <div class="product-card product-3">
                 <div class="product-header">
                     <div class="product-left">
-                        <div class="product-icon" onclick="openImageModal(3)">
+                        <div class="product-icon" onclick="editTitle(3)">
                             <span id="icon3">🔩</span>
-                            <img id="image3" class="product-image" style="display: none;">
                         </div>
                         <div class="product-title" id="title3" onclick="editTitle(3)">Producto C</div>
                         <input type="text" class="product-title-input" id="titleInput3" style="display: none;" onblur="saveTitle(3)" onkeypress="handleKeypress(event, 3)">
                     </div>
                     <div class="edit-buttons">
-                        <button class="edit-btn" onclick="openImageModal(3)" title="Cambiar imagen">📷</button>
                         <button class="edit-btn" onclick="editTitle(3)" title="Editar nombre">✏️</button>
                     </div>
                 </div>
@@ -508,182 +512,275 @@
 
     <div class="notification" id="notification"></div>
 
-    <!-- Modal para cambiar imagen -->
-    <div class="modal-overlay" id="imageModal">
-        <div class="modal-content">
-            <div class="modal-title">📷 Cambiar imagen</div>
-            
-            <div class="image-upload-area" onclick="document.getElementById('imageInput').click()">
-                <div class="upload-icon">📸</div>
-                <div class="upload-text">Seleccionar imagen</div>
-            </div>
-            
-            <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="previewImage()">
-            <img id="imagePreview" class="image-preview" style="display: none;">
-            
-            <div class="modal-buttons">
-                <button class="btn btn-secondary" onclick="closeImageModal()">Cancelar</button>
-                <button class="btn btn-primary" id="saveImageBtn" onclick="saveImage()" disabled>Guardar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <!-- Incluir Firebase -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-database-compat.min.js"></script>
 
     <script>
-        // Configuración de Firebase (Proyecto público para demos)
-        const firebaseConfig = {
-            apiKey: "AIzaSyBxJxC0KuJDzKxZxJ-KUEJxNQQJUqgzKxQ",
-            authDomain: "control-eficiencia-demo.firebaseapp.com",
-            databaseURL: "https://control-eficiencia-demo-default-rtdb.firebaseio.com",
-            projectId: "control-eficiencia-demo",
-            storageBucket: "control-eficiencia-demo.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef123456"
-        };
-
-        // Inicializar Firebase
-        let app, database, roomRef;
-        let isConnected = false;
-        let currentRoomCode = '';
-        let currentProduct = null;
-
-        // Datos del sistema
-        // Datos del sistema
+        // Variables globales
         let data = {
-            1: { name: 'Producto A', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
-            2: { name: 'Producto B', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
-            3: { name: 'Producto C', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null }
+            1: { name: 'Producto A', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0 },
+            2: { name: 'Producto B', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0 },
+            3: { name: 'Producto C', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0 }
         };
 
-        // ===== INICIALIZACIÓN FIREBASE =====
+        let currentRoomCode = '';
+        let database = null;
+        let roomRef = null;
+        let isConnected = false;
+
+        // Configuración de Firebase (usando una configuración pública de demostración)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDummy-Key-For-Demo-Replace-With-Real",
+            authDomain: "efficiency-control-demo.firebaseapp.com",
+            databaseURL: "https://efficiency-control-demo-default-rtdb.firebaseio.com",
+            projectId: "efficiency-control-demo"
+        };
+
+        // ===== INICIALIZACIÓN =====
         
-        function initFirebase() {
+        function initSystem() {
             try {
-                app = firebase.initializeApp(firebaseConfig);
-                database = firebase.database();
-                
-                // Generar código de sala único
+                updateSyncStatus('connecting', '🔄', 'Conectando...');
                 generateRoomCode();
-                connectToRoom();
-                
-            } catch (error) {
-                // Si Firebase falla, usar modo local
-                updateSyncStatus('local', '📱', 'Modo Local');
+                initFirebase();
                 loadLocalData();
-                notify('📱 Funcionando en modo local');
+                updateSummary();
+            } catch (error) {
+                console.error('Error initializing system:', error);
+                updateSyncStatus('local', '📱', 'Modo Local');
+                notify('Sistema iniciado en modo local');
             }
         }
 
         function generateRoomCode() {
-            // Generar código simple de 6 caracteres
+            // Solo generar código sin manipular la URL del navegador
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let code = '';
+            currentRoomCode = '';
             for (let i = 0; i < 6; i++) {
-                code += chars.charAt(Math.floor(Math.random() * chars.length));
+                currentRoomCode += chars.charAt(Math.floor(Math.random() * chars.length));
             }
             
-            // Usar código de URL si existe
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomFromUrl = urlParams.get('room');
+            // Mostrar el código en la interfaz
+            updateRoomDisplay();
+            console.log('Room code generated:', currentRoomCode);
+        }
+
+        function updateRoomDisplay() {
+            const roomCodeElement = document.getElementById('roomCode');
             
-            currentRoomCode = roomFromUrl || code;
-            document.getElementById('roomCode').textContent = currentRoomCode;
-            
-            // Actualizar URL sin recargar
-            if (!roomFromUrl) {
-                const newUrl = window.location.origin + window.location.pathname + '?room=' + currentRoomCode;
-                window.history.replaceState({}, '', newUrl);
+            if (roomCodeElement) {
+                roomCodeElement.innerHTML = `
+                    <div>Código de Sala: <strong>${currentRoomCode}</strong></div>
+                    <div style="font-size: 0.9rem; margin-top: 5px; color: #666;">
+                        Comparte este código con tu equipo
+                    </div>
+                `;
+            }
+        }
+
+        function initFirebase() {
+            try {
+                // Intentar inicializar Firebase
+                if (typeof firebase !== 'undefined') {
+                    firebase.initializeApp(firebaseConfig);
+                    database = firebase.database();
+                    connectToRoom();
+                } else {
+                    throw new Error('Firebase not loaded');
+                }
+            } catch (error) {
+                console.log('Firebase connection failed, using localStorage sync:', error);
+                initLocalSync();
             }
         }
 
         function connectToRoom() {
-            if (!database) return;
-            
             try {
-                updateSyncStatus('connecting', '🔄', 'Conectando...');
-                
+                if (!database) {
+                    throw new Error('No database connection');
+                }
+
                 roomRef = database.ref('rooms/' + currentRoomCode);
                 
                 // Escuchar cambios en tiempo real
                 roomRef.on('value', (snapshot) => {
                     const roomData = snapshot.val();
                     if (roomData && roomData.data) {
-                        // Actualizar datos locales con los de la nube
                         data = { ...data, ...roomData.data };
-                        
-                        // Restaurar interfaz
-                        for (let id = 1; id <= 3; id++) {
-                            restoreProductState(id);
-                        }
-                        updateSummary();
+                        updateAllDisplays();
+                        updateSyncStatus('connected', '🌐', 'Sincronizado');
+                        isConnected = true;
                     }
-                    
-                    isConnected = true;
-                    updateSyncStatus('connected', '🌐', 'Sincronizado en tiempo real');
                 });
-                
-                // Detectar desconexión
+
+                // Detectar conexión/desconexión
                 database.ref('.info/connected').on('value', (snapshot) => {
-                    if (snapshot.val() === false) {
-                        updateSyncStatus('local', '📱', 'Sin conexión - Modo local');
+                    if (snapshot.val()) {
+                        updateSyncStatus('connected', '🌐', 'Conectado');
+                        isConnected = true;
+                    } else {
+                        updateSyncStatus('local', '📱', 'Sin conexión');
                         isConnected = false;
                     }
                 });
+
+                notify('Conectado a sala: ' + currentRoomCode);
                 
             } catch (error) {
-                updateSyncStatus('local', '📱', 'Modo Local');
-                isConnected = false;
-                loadLocalData();
+                console.log('Room connection failed:', error);
+                initLocalSync();
             }
         }
 
-        function saveToCloud() {
-            if (!isConnected || !roomRef) {
-                saveLocalData();
-                return;
-            }
+        function initLocalSync() {
+            // Sistema de sincronización local como fallback
+            updateSyncStatus('local', '📱', 'Modo Local');
+            isConnected = false;
             
+            // Simular sincronización usando localStorage con polling
+            setInterval(() => {
+                const localKey = 'room_' + currentRoomCode;
+                const saved = localStorage.getItem(localKey);
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        if (parsed.lastUpdate && parsed.lastUpdate > (data.lastUpdate || 0)) {
+                            data = { ...data, ...parsed.data };
+                            updateAllDisplays();
+                        }
+                    } catch (e) {
+                        console.log('Error parsing local sync data');
+                    }
+                }
+            }, 2000);
+            
+            notify('Modo local activo - Sala: ' + currentRoomCode);
+        }
+
+        function saveToCloud() {
+            if (isConnected && roomRef) {
+                try {
+                    const dataToSave = {
+                        data: data,
+                        lastUpdate: Date.now(),
+                        room: currentRoomCode
+                    };
+                    roomRef.set(dataToSave);
+                } catch (error) {
+                    console.log('Cloud save failed:', error);
+                    saveToLocal();
+                }
+            } else {
+                saveToLocal();
+            }
+        }
+
+        function saveToLocal() {
             try {
+                const localKey = 'room_' + currentRoomCode;
                 const dataToSave = {
                     data: data,
                     lastUpdate: Date.now(),
                     room: currentRoomCode
                 };
-                
-                roomRef.set(dataToSave);
-                updateSyncStatus('connected', '✅', 'Guardado y sincronizado');
-                
-                setTimeout(() => {
-                    if (isConnected) {
-                        updateSyncStatus('connected', '🌐', 'Sincronizado en tiempo real');
-                    }
-                }, 2000);
-                
+                localStorage.setItem(localKey, JSON.stringify(dataToSave));
+                localStorage.setItem('lastRoom', currentRoomCode);
             } catch (error) {
-                saveLocalData();
+                console.log('Local save failed:', error);
             }
         }
 
+        function loadLocalData() {
+            try {
+                const localKey = 'room_' + currentRoomCode;
+                const saved = localStorage.getItem(localKey);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.data) {
+                        data = { ...data, ...parsed.data };
+                        updateAllDisplays();
+                    }
+                }
+            } catch (error) {
+                console.log('Error loading local data:', error);
+            }
+        }
+
+        function joinRoom() {
+            const joinInput = document.getElementById('joinRoomInput');
+            const roomToJoin = joinInput.value.trim().toUpperCase();
+            
+            if (roomToJoin.length !== 6) {
+                notify('El código debe tener 6 caracteres');
+                return;
+            }
+            
+            if (roomToJoin === currentRoomCode) {
+                notify('Ya estás en esa sala');
+                return;
+            }
+            
+            // Guardar datos actuales antes de cambiar de sala
+            saveToLocal();
+            
+            // Cambiar a la nueva sala
+            currentRoomCode = roomToJoin;
+            updateRoomDisplay();
+            joinInput.value = '';
+            
+            // Reconectar a la nueva sala
+            if (isConnected && roomRef) {
+                roomRef.off(); // Desconectar de la sala anterior
+            }
+            
+            loadLocalData();
+            
+            if (database) {
+                connectToRoom();
+            } else {
+                initLocalSync();
+            }
+            
+            notify('Te has unido a la sala: ' + currentRoomCode);
+        }
+
         function copyRoomCode() {
-            const fullUrl = window.location.origin + window.location.pathname + '?room=' + currentRoomCode;
+            const textToCopy = `Código de sala: ${currentRoomCode}`;
             
             if (navigator.clipboard) {
-                navigator.clipboard.writeText(fullUrl).then(() => {
-                    notify('📋 Link copiado - Compártelo con tu equipo');
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    notify('Código copiado: ' + currentRoomCode);
+                }).catch(() => {
+                    fallbackCopy(textToCopy);
                 });
             } else {
-                // Fallback para navegadores antiguos
-                const textArea = document.createElement('textarea');
-                textArea.value = fullUrl;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                notify('📋 Link copiado - Compártelo con tu equipo');
+                fallbackCopy(textToCopy);
             }
+        }
+
+        function fallbackCopy(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            textArea.style.left = '-999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            textArea.setSelectionRange(0, 99999);
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    notify('Código copiado: ' + currentRoomCode);
+                } else {
+                    notify('Código generado: ' + currentRoomCode + ' (copia manualmente)');
+                }
+            } catch (err) {
+                notify('Código generado: ' + currentRoomCode + ' (copia manualmente)');
+            }
+            
+            document.body.removeChild(textArea);
         }
 
         function updateSyncStatus(status, icon, text) {
@@ -691,196 +788,100 @@
             const iconEl = document.getElementById('syncIcon');
             const textEl = document.getElementById('syncText');
             
-            statusEl.className = `sync-status ${status}`;
-            iconEl.textContent = icon;
-            textEl.textContent = text;
-        }
-
-        // ===== FUNCIONES DE GUARDADO LOCAL =====
-        
-        function saveLocalData() {
-            try {
-                localStorage.setItem('controlEficienciaData', JSON.stringify(data));
-            } catch (error) {
-                console.log('Guardado local no disponible');
+            if (statusEl && iconEl && textEl) {
+                statusEl.className = `sync-status ${status}`;
+                iconEl.textContent = icon;
+                textEl.textContent = text;
             }
         }
 
-        function loadLocalData() {
-            try {
-                const savedData = localStorage.getItem('controlEficienciaData');
-                if (savedData) {
-                    data = { ...data, ...JSON.parse(savedData) };
-                    
-                    for (let id = 1; id <= 3; id++) {
-                        restoreProductState(id);
-                    }
-                    updateSummary();
-                }
-            } catch (error) {
-                console.log('Carga local no disponible');
+        function updateAllDisplays() {
+            for (let id = 1; id <= 3; id++) {
+                restoreProductState(id);
             }
+            updateSummary();
         }
 
         function restoreProductState(id) {
             const item = data[id];
+            if (!item) return;
             
-            if (item.name) {
-                document.getElementById('title' + id).textContent = item.name;
-            }
-            
-            if (item.image) {
-                const icon = document.getElementById('icon' + id);
-                const img = document.getElementById('image' + id);
-                icon.style.display = 'none';
-                img.src = item.image;
-                img.style.display = 'block';
+            const titleEl = document.getElementById('title' + id);
+            if (item.name && titleEl) {
+                titleEl.textContent = item.name;
             }
             
             if (item.set) {
-                document.getElementById('initialSection' + id).style.display = 'none';
-                document.getElementById('productionSection' + id).style.display = 'block';
+                const initialSection = document.getElementById('initialSection' + id);
+                const productionSection = document.getElementById('productionSection' + id);
+                if (initialSection && productionSection) {
+                    initialSection.style.display = 'none';
+                    productionSection.style.display = 'block';
+                }
             }
             
             updateDisplay(id);
         }
 
-        // ===== FUNCIONES DE CONTROL =====
-
-        function resetAllData() {
-            if (confirm('¿Estás seguro de que quieres borrar todos los datos? Esta acción no se puede deshacer.')) {
-                data = {
-                    1: { name: 'Producto A', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
-                    2: { name: 'Producto B', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
-                    3: { name: 'Producto C', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null }
-                };
-                
-                if (isConnected) {
-                    saveToCloud();
-                } else {
-                    saveLocalData();
-                }
-                
-                location.reload();
-            }
-        }
-
-        function exportData() {
-            try {
-                const dataToExport = {
-                    data: data,
-                    exportDate: new Date().toISOString(),
-                    room: currentRoomCode,
-                    version: '4.0'
-                };
-                
-                const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
-                    type: 'application/json'
-                });
-                
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `control-eficiencia-${new Date().toISOString().split('T')[0]}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                notify('💾 Datos exportados correctamente');
-            } catch (error) {
-                notify('❌ Error al exportar datos');
-            }
-        }
-
-        function importData() {
-            const file = document.getElementById('importFile').files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    
-                    if (imported.data) {
-                        if (confirm('¿Importar estos datos? Se sobrescribirán los datos actuales.')) {
-                            data = { ...data, ...imported.data };
-                            
-                            if (isConnected) {
-                                saveToCloud();
-                            } else {
-                                saveLocalData();
-                            }
-                            
-                            for (let id = 1; id <= 3; id++) {
-                                restoreProductState(id);
-                            }
-                            
-                            updateSummary();
-                            notify('✅ Datos importados correctamente');
-                        }
-                    } else {
-                        notify('❌ Archivo no válido');
-                    }
-                } catch (error) {
-                    notify('❌ Error al leer el archivo');
-                }
-            };
-            reader.readAsText(file);
-        }
-
         // ===== FUNCIONES PRINCIPALES =====
 
         function setStock(id) {
-            const val = parseInt(document.getElementById('initial' + id).value) || 0;
+            const inputEl = document.getElementById('initial' + id);
+            if (!inputEl) return;
+            
+            const val = parseInt(inputEl.value) || 0;
             if (val <= 0) {
-                notify('⚠️ Ingresa un valor válido mayor a 0');
+                notify('Ingresa un valor válido mayor a 0');
                 return;
             }
             
             data[id].stock = val;
             data[id].set = true;
             
-            document.getElementById('initialSection' + id).style.display = 'none';
-            document.getElementById('productionSection' + id).style.display = 'block';
+            const initialSection = document.getElementById('initialSection' + id);
+            const productionSection = document.getElementById('productionSection' + id);
+            
+            if (initialSection && productionSection) {
+                initialSection.style.display = 'none';
+                productionSection.style.display = 'block';
+            }
             
             updateDisplay(id);
             updateSummary();
+            saveToCloud();
             
-            if (isConnected) {
-                saveToCloud();
-            } else {
-                saveLocalData();
-            }
-            
-            notify('✅ Stock inicial establecido: ' + val);
+            notify('Stock inicial establecido: ' + val);
         }
 
         function registerProd(id) {
-            const prod = parseInt(document.getElementById('produced' + id).value) || 0;
-            const used = parseInt(document.getElementById('used' + id).value) || 0;
+            const prodInput = document.getElementById('produced' + id);
+            const usedInput = document.getElementById('used' + id);
+            
+            if (!prodInput || !usedInput) return;
+            
+            const prod = parseInt(prodInput.value) || 0;
+            const used = parseInt(usedInput.value) || 0;
             
             if (used <= 0) {
-                notify('⚠️ Debes usar al menos 1 unidad');
+                notify('Debes usar al menos 1 unidad');
                 return;
             }
             
             if (prod < 0) {
-                notify('⚠️ Las unidades buenas no pueden ser negativas');
+                notify('Las unidades buenas no pueden ser negativas');
                 return;
             }
             
             if (prod > used) {
-                notify('⚠️ No puedes producir más unidades buenas que las utilizadas');
+                notify('No puedes producir más unidades buenas que las utilizadas');
                 return;
             }
             
             if (used > data[id].stock) {
-                notify('❌ Stock insuficiente. Disponible: ' + data[id].stock);
+                notify('Stock insuficiente. Disponible: ' + data[id].stock);
                 return;
             }
             
-            // Solo restar las unidades utilizadas del stock
             data[id].stock = data[id].stock - used;
             data[id].totalProd += prod;
             data[id].totalUsed += used;
@@ -888,69 +889,81 @@
             data[id].todayProd += prod;
             data[id].todayUsed += used;
             
-            document.getElementById('produced' + id).value = '';
-            document.getElementById('used' + id).value = '';
+            prodInput.value = '';
+            usedInput.value = '';
             
             updateDisplay(id);
             updateSummary();
+            saveToCloud();
             
-            if (isConnected) {
-                saveToCloud();
-            } else {
-                saveLocalData();
-            }
-            
-            notify('✅ Registrado: ' + prod + ' buenas de ' + used + ' utilizadas');
+            notify('Registrado: ' + prod + ' buenas de ' + used + ' utilizadas');
         }
 
         function addStock(id) {
-            const val = parseInt(document.getElementById('add' + id).value) || 0;
+            const addInput = document.getElementById('add' + id);
+            if (!addInput) return;
+            
+            const val = parseInt(addInput.value) || 0;
             if (val <= 0) {
-                notify('⚠️ Ingresa un valor válido mayor a 0');
+                notify('Ingresa un valor válido mayor a 0');
                 return;
             }
             
             data[id].stock += val;
-            document.getElementById('add' + id).value = '';
+            addInput.value = '';
             
             updateDisplay(id);
             updateSummary();
+            saveToCloud();
             
-            if (isConnected) {
-                saveToCloud();
-            } else {
-                saveLocalData();
-            }
-            
-            notify('✅ Añadido: +' + val + ' unidades al stock');
+            notify('Añadido: +' + val + ' unidades al stock');
         }
 
         function updateDisplay(id) {
             const item = data[id];
+            if (!item) return;
+            
             const eff = item.totalUsed > 0 ? ((item.totalProd / item.totalUsed) * 100) : 0;
             
-            document.getElementById('stock' + id).textContent = item.stock;
-            document.getElementById('todayProd' + id).textContent = item.todayProd;
-            document.getElementById('todayUsed' + id).textContent = item.todayUsed;
-            document.getElementById('sessions' + id).textContent = item.sessions;
-            document.getElementById('efficiency' + id).textContent = eff.toFixed(1) + '%';
-            document.getElementById('effBar' + id).style.width = Math.min(eff, 100) + '%';
+            const elements = {
+                stock: document.getElementById('stock' + id),
+                todayProd: document.getElementById('todayProd' + id),
+                todayUsed: document.getElementById('todayUsed' + id),
+                sessions: document.getElementById('sessions' + id),
+                efficiency: document.getElementById('efficiency' + id),
+                effBar: document.getElementById('effBar' + id)
+            };
+            
+            if (elements.stock) elements.stock.textContent = item.stock;
+            if (elements.todayProd) elements.todayProd.textContent = item.todayProd;
+            if (elements.todayUsed) elements.todayUsed.textContent = item.todayUsed;
+            if (elements.sessions) elements.sessions.textContent = item.sessions;
+            if (elements.efficiency) elements.efficiency.textContent = eff.toFixed(1) + '%';
+            if (elements.effBar) elements.effBar.style.width = Math.min(eff, 100) + '%';
         }
 
         function updateSummary() {
-            const totalStock = Object.values(data).reduce((sum, p) => sum + p.stock, 0);
-            const totalUsed = Object.values(data).reduce((sum, p) => sum + p.totalUsed, 0);
-            const totalProd = Object.values(data).reduce((sum, p) => sum + p.totalProd, 0);
+            const totalStock = Object.values(data).reduce((sum, p) => sum + (p.stock || 0), 0);
+            const totalUsed = Object.values(data).reduce((sum, p) => sum + (p.totalUsed || 0), 0);
+            const totalProd = Object.values(data).reduce((sum, p) => sum + (p.totalProd || 0), 0);
             const avgEff = totalUsed > 0 ? ((totalProd / totalUsed) * 100) : 0;
             
-            document.getElementById('totalStock').textContent = totalStock;
-            document.getElementById('totalUsed').textContent = totalUsed;
-            document.getElementById('avgEfficiency').textContent = avgEff.toFixed(1) + '%';
+            const elements = {
+                totalStock: document.getElementById('totalStock'),
+                totalUsed: document.getElementById('totalUsed'),
+                avgEfficiency: document.getElementById('avgEfficiency')
+            };
+            
+            if (elements.totalStock) elements.totalStock.textContent = totalStock;
+            if (elements.totalUsed) elements.totalUsed.textContent = totalUsed;
+            if (elements.avgEfficiency) elements.avgEfficiency.textContent = avgEff.toFixed(1) + '%';
         }
 
         function editTitle(id) {
             const titleEl = document.getElementById('title' + id);
             const inputEl = document.getElementById('titleInput' + id);
+            
+            if (!titleEl || !inputEl) return;
             
             titleEl.style.display = 'none';
             inputEl.style.display = 'block';
@@ -962,19 +975,16 @@
         function saveTitle(id) {
             const titleEl = document.getElementById('title' + id);
             const inputEl = document.getElementById('titleInput' + id);
+            
+            if (!titleEl || !inputEl) return;
+            
             const newName = inputEl.value.trim();
 
             if (newName && newName !== data[id].name) {
                 data[id].name = newName;
                 titleEl.textContent = newName;
-                
-                if (isConnected) {
-                    saveToCloud();
-                } else {
-                    saveLocalData();
-                }
-                
-                notify('✅ Nombre actualizado: ' + newName);
+                saveToCloud();
+                notify('Nombre actualizado: ' + newName);
             }
 
             inputEl.style.display = 'none';
@@ -985,77 +995,85 @@
             if (event.key === 'Enter') {
                 saveTitle(id);
             } else if (event.key === 'Escape') {
-                document.getElementById('titleInput' + id).style.display = 'none';
-                document.getElementById('title' + id).style.display = 'block';
+                const titleEl = document.getElementById('title' + id);
+                const inputEl = document.getElementById('titleInput' + id);
+                if (titleEl && inputEl) {
+                    inputEl.style.display = 'none';
+                    titleEl.style.display = 'block';
+                }
             }
         }
 
-        function openImageModal(id) {
-            currentProduct = id;
-            document.getElementById('imageModal').style.display = 'flex';
-            document.getElementById('imagePreview').style.display = 'none';
-            document.getElementById('saveImageBtn').disabled = true;
-            document.getElementById('imageInput').value = '';
-        }
-
-        function closeImageModal() {
-            document.getElementById('imageModal').style.display = 'none';
-            currentProduct = null;
-        }
-
-        function previewImage() {
-            const file = document.getElementById('imageInput').files[0];
-            const preview = document.getElementById('imagePreview');
-            const saveBtn = document.getElementById('saveImageBtn');
-
-            if (file) {
-                if (file.size > 5 * 1024 * 1024) {
-                    notify('❌ Imagen muy grande (máximo 5MB)');
-                    return;
-                }
-
-                if (!file.type.startsWith('image/')) {
-                    notify('❌ Selecciona una imagen válida');
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                    saveBtn.disabled = false;
+        function resetAllData() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los datos? Esta acción no se puede deshacer.')) {
+                data = {
+                    1: { name: 'Producto A', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0 },
+                    2: { name: 'Producto B', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0 },
+                    3: { name: 'Producto C', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0 }
                 };
-                reader.readAsDataURL(file);
+                
+                saveToCloud();
+                updateAllDisplays();
+                notify('Datos reiniciados');
             }
         }
 
-        function saveImage() {
-            if (!currentProduct) return;
+        function exportData() {
+            const dataToExport = {
+                data: data,
+                exportDate: new Date().toISOString(),
+                room: currentRoomCode,
+                version: '6.0'
+            };
+            
+            const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
+                type: 'application/json'
+            });
+            
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `control-eficiencia-${currentRoomCode}-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            notify('Datos exportados correctamente');
+        }
 
-            const preview = document.getElementById('imagePreview');
-            const icon = document.getElementById('icon' + currentProduct);
-            const img = document.getElementById('image' + currentProduct);
+        function importData() {
+            const fileInput = document.getElementById('importFile');
+            const file = fileInput.files[0];
+            if (!file) return;
 
-            if (preview.src) {
-                data[currentProduct].image = preview.src;
-                
-                icon.style.display = 'none';
-                img.src = preview.src;
-                img.style.display = 'block';
-
-                if (isConnected) {
-                    saveToCloud();
-                } else {
-                    saveLocalData();
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    
+                    if (imported.data) {
+                        if (confirm('¿Importar estos datos? Se sobrescribirán los datos actuales.')) {
+                            data = { ...data, ...imported.data };
+                            saveToCloud();
+                            updateAllDisplays();
+                            notify('Datos importados correctamente');
+                        }
+                    } else {
+                        notify('Archivo no válido');
+                    }
+                } catch (parseError) {
+                    notify('Error al leer el archivo');
                 }
-                
-                closeImageModal();
-                notify('✅ Imagen actualizada correctamente');
-            }
+            };
+            
+            reader.readAsText(file);
         }
 
         function notify(msg) {
             const notification = document.getElementById('notification');
+            if (!notification) return;
+            
             notification.textContent = msg;
             notification.classList.add('show');
             
@@ -1064,24 +1082,20 @@
             }, 3000);
         }
 
-        // ===== INICIALIZACIÓN =====
+        // ===== EVENT LISTENERS =====
 
-        document.addEventListener('DOMContentLoaded', function() {
-            // Inicializar Firebase o modo local
-            initFirebase();
+        function setupEventListeners() {
+            // Enter en input de unirse a sala
+            const joinInput = document.getElementById('joinRoomInput');
+            if (joinInput) {
+                joinInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        joinRoom();
+                    }
+                });
+            }
             
-            // Cargar datos locales como respaldo
-            loadLocalData();
-            updateSummary();
-            
-            // Eventos del modal
-            document.getElementById('imageModal').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeImageModal();
-                }
-            });
-            
-            // Eventos de teclado
+            // Input event listeners para cada producto
             for (let i = 1; i <= 3; i++) {
                 const initialInput = document.getElementById('initial' + i);
                 if (initialInput) {
@@ -1116,19 +1130,23 @@
                     });
                 }
             }
-            
-            // Validación de inputs numéricos
-            const numberInputs = document.querySelectorAll('input[type="number"]');
-            numberInputs.forEach(input => {
-                input.addEventListener('input', function() {
-                    if (this.value < 0) {
-                        this.value = 0;
-                    }
-                });
-            });
-            
-            notify('🎉 Sistema listo con sincronización automática');
+        }
+
+        // ===== INICIALIZACIÓN =====
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initSystem();
+            setupEventListeners();
+        });
+
+        // Cleanup al cerrar
+        window.addEventListener('beforeunload', function() {
+            if (roomRef) {
+                roomRef.off();
+            }
         });
     </script>
+</body>
+</html>
 </body>
 </html>
