@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control de Eficiencia</title>
+    <title>Control de Eficiencia - Sincronizado</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -16,6 +16,24 @@
         .header { text-align: center; margin-bottom: 40px; }
         .header h1 { color: white; font-size: 2.5rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
         .header p { color: rgba(255,255,255,0.9); font-size: 1.1rem; }
+        
+        .sync-status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.9);
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sync-status.connected { color: #27ae60; }
+        .sync-status.disconnected { color: #e74c3c; }
+        .sync-status.syncing { color: #f39c12; }
         
         .controls-panel {
             background: rgba(255,255,255,0.9);
@@ -175,14 +193,21 @@
         }
         .notification.show { transform: translateX(0); }
         
-        .save-indicator {
-            position: fixed; bottom: 20px; right: 20px;
-            background: rgba(39, 174, 96, 0.9); color: white;
-            padding: 8px 15px; border-radius: 20px;
-            font-size: 0.8rem; opacity: 0;
-            transition: opacity 0.3s ease; z-index: 1000;
+        .setup-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: flex; justify-content: center;
+            align-items: center; z-index: 3000;
         }
-        .save-indicator.show { opacity: 1; }
+        .setup-content {
+            background: white; padding: 30px; border-radius: 15px;
+            max-width: 500px; width: 90%; text-align: center;
+        }
+        .setup-title { font-size: 1.5rem; font-weight: bold; color: #2c3e50; margin-bottom: 20px; }
+        .setup-input {
+            width: 100%; padding: 12px; border: 2px solid #e9ecef;
+            border-radius: 8px; font-size: 1rem; margin-bottom: 15px;
+        }
+        .setup-input:focus { outline: none; border-color: #4ecdc4; }
         
         @media (max-width: 768px) {
             .container { padding: 10px; }
@@ -193,16 +218,39 @@
     </style>
 </head>
 <body>
+    <!-- Modal de configuración inicial -->
+    <div class="setup-modal" id="setupModal">
+        <div class="setup-content">
+            <div class="setup-title">🔧 Configuración Inicial</div>
+            <p style="margin-bottom: 20px; color: #666;">Para sincronizar entre dispositivos, necesitas crear una "Sala" compartida:</p>
+            
+            <input type="text" class="setup-input" id="roomInput" placeholder="Nombre de tu sala (ej: mi-empresa-2024)">
+            
+            <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 0.9rem; color: #666;">
+                💡 <strong>Tip:</strong> Comparte este nombre con tu equipo para que puedan acceder a los mismos datos
+            </div>
+            
+            <button class="btn btn-primary" onclick="joinRoom()" style="width: 100%; margin-bottom: 10px;">🚀 Crear/Unirse a Sala</button>
+            <button class="btn-secondary" onclick="useOfflineMode()" style="width: 100%; padding: 8px; border: none; border-radius: 6px; cursor: pointer;">📱 Usar sin sincronización</button>
+        </div>
+    </div>
+
+    <div class="sync-status" id="syncStatus">
+        <span id="syncIcon">🔄</span>
+        <span id="syncText">Conectando...</span>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>📊 Control de Eficiencia</h1>
-            <p>Registro y análisis de rendimiento por producto</p>
+            <p>Registro y análisis sincronizado en tiempo real</p>
         </div>
 
         <div class="controls-panel">
             <button class="btn-reset" onclick="resetAllData()">🗑️ Reset Datos</button>
             <button class="btn-export" onclick="exportData()">💾 Exportar</button>
             <button class="btn-import" onclick="document.getElementById('importFile').click()">📤 Importar</button>
+            <button class="btn btn-primary" onclick="showRoomConfig()">🏠 Cambiar Sala</button>
             <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData()">
         </div>
 
@@ -459,7 +507,6 @@
     </div>
 
     <div class="notification" id="notification"></div>
-    <div class="save-indicator" id="saveIndicator">💾 Guardado</div>
 
     <!-- Modal para cambiar imagen -->
     <div class="modal-overlay" id="imageModal">
@@ -472,426 +519,4 @@
             </div>
             
             <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="previewImage()">
-            <img id="imagePreview" class="image-preview" style="display: none;">
-            
-            <div class="modal-buttons">
-                <button class="btn btn-secondary" onclick="closeImageModal()">Cancelar</button>
-                <button class="btn btn-primary" id="saveImageBtn" onclick="saveImage()" disabled>Guardar</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Datos del sistema
-        let data = {
-            1: { name: 'Producto A', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
-            2: { name: 'Producto B', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
-            3: { name: 'Producto C', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null }
-        };
-
-        let currentProduct = null;
-
-        // ===== FUNCIONES DE GUARDADO Y CARGA =====
-        
-        function saveData() {
-            try {
-                const dataToSave = {
-                    ...data,
-                    lastSaved: new Date().toISOString()
-                };
-                localStorage.setItem('controlEficienciaData', JSON.stringify(dataToSave));
-                showSaveIndicator();
-            } catch (error) {
-                console.error('Error guardando datos:', error);
-                notify('⚠️ Error al guardar datos');
-            }
-        }
-
-        function loadData() {
-            try {
-                const savedData = localStorage.getItem('controlEficienciaData');
-                if (savedData) {
-                    const parsed = JSON.parse(savedData);
-                    delete parsed.lastSaved;
-                    data = { ...data, ...parsed };
-                    
-                    for (let id = 1; id <= 3; id++) {
-                        restoreProductState(id);
-                    }
-                    
-                    updateSummary();
-                    notify('✅ Datos cargados correctamente');
-                }
-            } catch (error) {
-                console.error('Error cargando datos:', error);
-                notify('⚠️ Error al cargar datos guardados');
-            }
-        }
-
-        function restoreProductState(id) {
-            const item = data[id];
-            
-            if (item.name) {
-                document.getElementById('title' + id).textContent = item.name;
-            }
-            
-            if (item.image) {
-                const icon = document.getElementById('icon' + id);
-                const img = document.getElementById('image' + id);
-                icon.style.display = 'none';
-                img.src = item.image;
-                img.style.display = 'block';
-            }
-            
-            if (item.set) {
-                document.getElementById('initialSection' + id).style.display = 'none';
-                document.getElementById('productionSection' + id).style.display = 'block';
-            }
-            
-            updateDisplay(id);
-        }
-
-        function showSaveIndicator() {
-            const indicator = document.getElementById('saveIndicator');
-            indicator.classList.add('show');
-            setTimeout(() => {
-                indicator.classList.remove('show');
-            }, 2000);
-        }
-
-        // ===== FUNCIONES DE CONTROL =====
-
-        function resetAllData() {
-            if (confirm('¿Estás seguro de que quieres borrar todos los datos? Esta acción no se puede deshacer.')) {
-                localStorage.removeItem('controlEficienciaData');
-                location.reload();
-            }
-        }
-
-        function exportData() {
-            try {
-                const dataToExport = {
-                    data: data,
-                    exportDate: new Date().toISOString(),
-                    version: '1.0'
-                };
-                
-                const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
-                    type: 'application/json'
-                });
-                
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `control-eficiencia-${new Date().toISOString().split('T')[0]}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                notify('💾 Datos exportados correctamente');
-            } catch (error) {
-                console.error('Error exportando:', error);
-                notify('❌ Error al exportar datos');
-            }
-        }
-
-        function importData() {
-            const file = document.getElementById('importFile').files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    
-                    if (imported.data) {
-                        if (confirm('¿Importar estos datos? Se sobrescribirán los datos actuales.')) {
-                            data = { ...data, ...imported.data };
-                            saveData();
-                            
-                            for (let id = 1; id <= 3; id++) {
-                                restoreProductState(id);
-                            }
-                            
-                            updateSummary();
-                            notify('✅ Datos importados correctamente');
-                        }
-                    } else {
-                        notify('❌ Archivo no válido');
-                    }
-                } catch (error) {
-                    console.error('Error importando:', error);
-                    notify('❌ Error al leer el archivo');
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        // ===== FUNCIONES PRINCIPALES =====
-
-        function setStock(id) {
-            const val = parseInt(document.getElementById('initial' + id).value) || 0;
-            if (val <= 0) {
-                notify('⚠️ Ingresa un valor válido mayor a 0');
-                return;
-            }
-            
-            data[id].stock = val;
-            data[id].set = true;
-            
-            document.getElementById('initialSection' + id).style.display = 'none';
-            document.getElementById('productionSection' + id).style.display = 'block';
-            
-            updateDisplay(id);
-            updateSummary();
-            saveData();
-            notify('✅ Stock inicial establecido: ' + val);
-        }
-
-        function registerProd(id) {
-            const prod = parseInt(document.getElementById('produced' + id).value) || 0;
-            const used = parseInt(document.getElementById('used' + id).value) || 0;
-            
-            if (used <= 0) {
-                notify('⚠️ Debes usar al menos 1 unidad');
-                return;
-            }
-            
-            if (prod < 0) {
-                notify('⚠️ Las unidades buenas no pueden ser negativas');
-                return;
-            }
-            
-            if (prod > used) {
-                notify('⚠️ No puedes producir más unidades buenas que las utilizadas');
-                return;
-            }
-            
-            if (used > data[id].stock) {
-                notify('❌ Stock insuficiente. Disponible: ' + data[id].stock);
-                return;
-            }
-            
-            // CORRECCIÓN: Solo restar las unidades utilizadas del stock
-            data[id].stock = data[id].stock - used;
-            data[id].totalProd += prod;
-            data[id].totalUsed += used;
-            data[id].sessions += 1;
-            data[id].todayProd += prod;
-            data[id].todayUsed += used;
-            
-            document.getElementById('produced' + id).value = '';
-            document.getElementById('used' + id).value = '';
-            
-            updateDisplay(id);
-            updateSummary();
-            saveData();
-            notify('✅ Registrado: ' + prod + ' buenas de ' + used + ' utilizadas');
-        }
-
-        function addStock(id) {
-            const val = parseInt(document.getElementById('add' + id).value) || 0;
-            if (val <= 0) {
-                notify('⚠️ Ingresa un valor válido mayor a 0');
-                return;
-            }
-            
-            data[id].stock += val;
-            document.getElementById('add' + id).value = '';
-            
-            updateDisplay(id);
-            updateSummary();
-            saveData();
-            notify('✅ Añadido: +' + val + ' unidades al stock');
-        }
-
-        function updateDisplay(id) {
-            const item = data[id];
-            const eff = item.totalUsed > 0 ? ((item.totalProd / item.totalUsed) * 100) : 0;
-            
-            document.getElementById('stock' + id).textContent = item.stock;
-            document.getElementById('todayProd' + id).textContent = item.todayProd;
-            document.getElementById('todayUsed' + id).textContent = item.todayUsed;
-            document.getElementById('sessions' + id).textContent = item.sessions;
-            document.getElementById('efficiency' + id).textContent = eff.toFixed(1) + '%';
-            document.getElementById('effBar' + id).style.width = Math.min(eff, 100) + '%';
-        }
-
-        function updateSummary() {
-            const totalStock = Object.values(data).reduce((sum, p) => sum + p.stock, 0);
-            const totalUsed = Object.values(data).reduce((sum, p) => sum + p.totalUsed, 0);
-            const totalProd = Object.values(data).reduce((sum, p) => sum + p.totalProd, 0);
-            const avgEff = totalUsed > 0 ? ((totalProd / totalUsed) * 100) : 0;
-            
-            document.getElementById('totalStock').textContent = totalStock;
-            document.getElementById('totalUsed').textContent = totalUsed;
-            document.getElementById('avgEfficiency').textContent = avgEff.toFixed(1) + '%';
-        }
-
-        function editTitle(id) {
-            const titleEl = document.getElementById('title' + id);
-            const inputEl = document.getElementById('titleInput' + id);
-            
-            titleEl.style.display = 'none';
-            inputEl.style.display = 'block';
-            inputEl.value = data[id].name;
-            inputEl.focus();
-            inputEl.select();
-        }
-
-        function saveTitle(id) {
-            const titleEl = document.getElementById('title' + id);
-            const inputEl = document.getElementById('titleInput' + id);
-            const newName = inputEl.value.trim();
-
-            if (newName && newName !== data[id].name) {
-                data[id].name = newName;
-                titleEl.textContent = newName;
-                saveData();
-                notify('✅ Nombre actualizado: ' + newName);
-            }
-
-            inputEl.style.display = 'none';
-            titleEl.style.display = 'block';
-        }
-
-        function handleKeypress(event, id) {
-            if (event.key === 'Enter') {
-                saveTitle(id);
-            } else if (event.key === 'Escape') {
-                document.getElementById('titleInput' + id).style.display = 'none';
-                document.getElementById('title' + id).style.display = 'block';
-            }
-        }
-
-        function openImageModal(id) {
-            currentProduct = id;
-            document.getElementById('imageModal').style.display = 'flex';
-            document.getElementById('imagePreview').style.display = 'none';
-            document.getElementById('saveImageBtn').disabled = true;
-            document.getElementById('imageInput').value = '';
-        }
-
-        function closeImageModal() {
-            document.getElementById('imageModal').style.display = 'none';
-            currentProduct = null;
-        }
-
-        function previewImage() {
-            const file = document.getElementById('imageInput').files[0];
-            const preview = document.getElementById('imagePreview');
-            const saveBtn = document.getElementById('saveImageBtn');
-
-            if (file) {
-                if (file.size > 5 * 1024 * 1024) {
-                    notify('❌ Imagen muy grande (máximo 5MB)');
-                    return;
-                }
-
-                if (!file.type.startsWith('image/')) {
-                    notify('❌ Selecciona una imagen válida');
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                    saveBtn.disabled = false;
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-
-        function saveImage() {
-            if (!currentProduct) return;
-
-            const preview = document.getElementById('imagePreview');
-            const icon = document.getElementById('icon' + currentProduct);
-            const img = document.getElementById('image' + currentProduct);
-
-            if (preview.src) {
-                data[currentProduct].image = preview.src;
-                
-                icon.style.display = 'none';
-                img.src = preview.src;
-                img.style.display = 'block';
-
-                saveData();
-                closeImageModal();
-                notify('✅ Imagen actualizada correctamente');
-            }
-        }
-
-        function notify(msg) {
-            const notification = document.getElementById('notification');
-            notification.textContent = msg;
-            notification.classList.add('show');
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 3000);
-        }
-
-        // ===== INICIALIZACIÓN =====
-
-        document.addEventListener('DOMContentLoaded', function() {
-            loadData();
-            updateSummary();
-            
-            document.getElementById('imageModal').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeImageModal();
-                }
-            });
-            
-            for (let i = 1; i <= 3; i++) {
-                const initialInput = document.getElementById('initial' + i);
-                if (initialInput) {
-                    initialInput.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') {
-                            setStock(i);
-                        }
-                    });
-                }
-                
-                const prodInput = document.getElementById('produced' + i);
-                const usedInput = document.getElementById('used' + i);
-                if (prodInput && usedInput) {
-                    prodInput.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') {
-                            usedInput.focus();
-                        }
-                    });
-                    usedInput.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') {
-                            registerProd(i);
-                        }
-                    });
-                }
-                
-                const addInput = document.getElementById('add' + i);
-                if (addInput) {
-                    addInput.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') {
-                            addStock(i);
-                        }
-                    });
-                }
-            }
-            
-            const numberInputs = document.querySelectorAll('input[type="number"]');
-            numberInputs.forEach(input => {
-                input.addEventListener('input', function() {
-                    if (this.value < 0) {
-                        this.value = 0;
-                    }
-                });
-            });
-            
-            notify('🎉 Sistema de Control de Eficiencia listo');
-        });
-    </script>
-</body>
-</html>
+            <img id="imagePreview" class="image-preview" style="display: none
