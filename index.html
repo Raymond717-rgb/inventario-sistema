@@ -35,6 +35,23 @@
         .sync-status.disconnected { color: #e74c3c; }
         .sync-status.syncing { color: #f39c12; }
         
+        .room-panel {
+            background: rgba(255,255,255,0.9);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .room-input {
+            display: inline-block;
+            padding: 8px 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            margin: 0 10px;
+            font-size: 0.9rem;
+        }
+        .room-input:focus { outline: none; border-color: #4ecdc4; }
+        
         .controls-panel {
             background: rgba(255,255,255,0.9);
             border-radius: 15px;
@@ -42,8 +59,8 @@
             margin-bottom: 20px;
             text-align: center;
         }
-        .controls-panel button {
-            margin: 0 10px;
+        .controls-panel button, .room-panel button {
+            margin: 0 5px;
             padding: 8px 16px;
             border: none;
             border-radius: 6px;
@@ -57,6 +74,8 @@
         .btn-export:hover { background: #2980b9; transform: translateY(-1px); }
         .btn-import { background: #27ae60; color: white; }
         .btn-import:hover { background: #229954; transform: translateY(-1px); }
+        .btn-sync { background: #9b59b6; color: white; }
+        .btn-sync:hover { background: #8e44ad; transform: translateY(-1px); }
         
         .summary-panel {
             background: rgba(255,255,255,0.95);
@@ -193,22 +212,6 @@
         }
         .notification.show { transform: translateX(0); }
         
-        .setup-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); display: flex; justify-content: center;
-            align-items: center; z-index: 3000;
-        }
-        .setup-content {
-            background: white; padding: 30px; border-radius: 15px;
-            max-width: 500px; width: 90%; text-align: center;
-        }
-        .setup-title { font-size: 1.5rem; font-weight: bold; color: #2c3e50; margin-bottom: 20px; }
-        .setup-input {
-            width: 100%; padding: 12px; border: 2px solid #e9ecef;
-            border-radius: 8px; font-size: 1rem; margin-bottom: 15px;
-        }
-        .setup-input:focus { outline: none; border-color: #4ecdc4; }
-        
         @media (max-width: 768px) {
             .container { padding: 10px; }
             .products-grid { grid-template-columns: 1fr; }
@@ -218,39 +221,28 @@
     </style>
 </head>
 <body>
-    <!-- Modal de configuración inicial -->
-    <div class="setup-modal" id="setupModal">
-        <div class="setup-content">
-            <div class="setup-title">🔧 Configuración Inicial</div>
-            <p style="margin-bottom: 20px; color: #666;">Para sincronizar entre dispositivos, necesitas crear una "Sala" compartida:</p>
-            
-            <input type="text" class="setup-input" id="roomInput" placeholder="Nombre de tu sala (ej: mi-empresa-2024)">
-            
-            <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 0.9rem; color: #666;">
-                💡 <strong>Tip:</strong> Comparte este nombre con tu equipo para que puedan acceder a los mismos datos
-            </div>
-            
-            <button class="btn btn-primary" onclick="joinRoom()" style="width: 100%; margin-bottom: 10px;">🚀 Crear/Unirse a Sala</button>
-            <button class="btn-secondary" onclick="useOfflineMode()" style="width: 100%; padding: 8px; border: none; border-radius: 6px; cursor: pointer;">📱 Usar sin sincronización</button>
-        </div>
-    </div>
-
     <div class="sync-status" id="syncStatus">
-        <span id="syncIcon">🔄</span>
-        <span id="syncText">Conectando...</span>
+        <span id="syncIcon">📱</span>
+        <span id="syncText">Modo Local</span>
     </div>
 
     <div class="container">
         <div class="header">
             <h1>📊 Control de Eficiencia</h1>
-            <p>Registro y análisis sincronizado en tiempo real</p>
+            <p>Registro y análisis de rendimiento por producto</p>
+        </div>
+
+        <div class="room-panel">
+            <span style="margin-right: 10px;">🏠 Sala de sincronización:</span>
+            <input type="text" class="room-input" id="roomId" placeholder="nombre-de-tu-sala" value="">
+            <button class="btn-sync" onclick="connectToRoom()">🔄 Conectar</button>
+            <button class="btn-secondary" onclick="disconnectRoom()">❌ Desconectar</button>
         </div>
 
         <div class="controls-panel">
             <button class="btn-reset" onclick="resetAllData()">🗑️ Reset Datos</button>
             <button class="btn-export" onclick="exportData()">💾 Exportar</button>
             <button class="btn-import" onclick="document.getElementById('importFile').click()">📤 Importar</button>
-            <button class="btn btn-primary" onclick="showRoomConfig()">🏠 Cambiar Sala</button>
             <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData()">
         </div>
 
@@ -519,4 +511,640 @@
             </div>
             
             <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="previewImage()">
-            <img id="imagePreview" class="image-preview" style="display: none
+            <img id="imagePreview" class="image-preview" style="display: none;">
+            
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeImageModal()">Cancelar</button>
+                <button class="btn btn-primary" id="saveImageBtn" onclick="saveImage()" disabled>Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Datos del sistema
+        let data = {
+            1: { name: 'Producto A', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
+            2: { name: 'Producto B', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
+            3: { name: 'Producto C', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null }
+        };
+
+        let currentProduct = null;
+        let isConnected = false;
+        let syncInterval = null;
+        let currentRoom = '';
+
+        // ===== FUNCIONES DE SINCRONIZACIÓN =====
+        
+        async function connectToRoom() {
+            const roomId = document.getElementById('roomId').value.trim();
+            if (!roomId) {
+                notify('⚠️ Ingresa un nombre de sala');
+                return;
+            }
+            
+            try {
+                updateSyncStatus('syncing', '🔄', 'Conectando...');
+                
+                // Usar jsonbin.io como base de datos simple
+                const binId = await getOrCreateBin(roomId);
+                if (binId) {
+                    currentRoom = roomId;
+                    isConnected = true;
+                    localStorage.setItem('currentRoom', roomId);
+                    localStorage.setItem('binId', binId);
+                    
+                    // Cargar datos de la nube
+                    await loadFromCloud();
+                    
+                    // Iniciar sincronización automática cada 10 segundos
+                    if (syncInterval) clearInterval(syncInterval);
+                    syncInterval = setInterval(loadFromCloud, 10000);
+                    
+                    updateSyncStatus('connected', '🌐', `Conectado: ${roomId}`);
+                    notify('✅ Conectado a la sala: ' + roomId);
+                } else {
+                    throw new Error('No se pudo conectar');
+                }
+            } catch (error) {
+                updateSyncStatus('disconnected', '❌', 'Error de conexión');
+                notify('❌ Error al conectar: ' + error.message);
+            }
+        }
+
+        async function getOrCreateBin(roomId) {
+            // Usar un servicio simple de almacenamiento en la nube
+            try {
+                // Intentar cargar bin existente
+                const storedBinId = localStorage.getItem('binId_' + roomId);
+                if (storedBinId) {
+                    return storedBinId;
+                }
+                
+                // Crear nuevo bin usando API gratuita
+                const response = await fetch('https://api.jsonbin.io/v3/b', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': '$2a$10$5Vh/YJPXi5qN8R5ZLPQRNevnfL8b3dN7lGQhJZY.1J6qPQ6F6Z8Sy' // Clave temporal
+                    },
+                    body: JSON.stringify({
+                        room: roomId,
+                        data: data,
+                        lastUpdate: new Date().toISOString()
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    const binId = result.metadata.id;
+                    localStorage.setItem('binId_' + roomId, binId);
+                    return binId;
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('Error creating/getting bin:', error);
+                return null;
+            }
+        }
+
+        async function loadFromCloud() {
+            if (!isConnected || !currentRoom) return;
+            
+            try {
+                const binId = localStorage.getItem('binId');
+                if (!binId) return;
+                
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+                    headers: {
+                        'X-Master-Key': '$2a$10$5Vh/YJPXi5qN8R5ZLPQRNevnfL8b3dN7lGQhJZY.1J6qPQ6F6Z8Sy'
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.record && result.record.data) {
+                        // Actualizar datos locales
+                        data = { ...data, ...result.record.data };
+                        
+                        // Restaurar interfaz
+                        for (let id = 1; id <= 3; id++) {
+                            restoreProductState(id);
+                        }
+                        updateSummary();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading from cloud:', error);
+            }
+        }
+
+        async function saveToCloud() {
+            if (!isConnected || !currentRoom) {
+                saveData(); // Guardar local como fallback
+                return;
+            }
+            
+            try {
+                const binId = localStorage.getItem('binId');
+                if (!binId) return;
+                
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': '$2a$10$5Vh/YJPXi5qN8R5ZLPQRNevnfL8b3dN7lGQhJZY.1J6qPQ6F6Z8Sy'
+                    },
+                    body: JSON.stringify({
+                        room: currentRoom,
+                        data: data,
+                        lastUpdate: new Date().toISOString()
+                    })
+                });
+                
+                if (response.ok) {
+                    updateSyncStatus('connected', '✅', `Sincronizado: ${currentRoom}`);
+                    setTimeout(() => {
+                        if (isConnected) {
+                            updateSyncStatus('connected', '🌐', `Conectado: ${currentRoom}`);
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error('Error al guardar');
+                }
+            } catch (error) {
+                console.error('Error saving to cloud:', error);
+                saveData(); // Guardar local como fallback
+            }
+        }
+
+        function disconnectRoom() {
+            isConnected = false;
+            currentRoom = '';
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
+            }
+            localStorage.removeItem('currentRoom');
+            updateSyncStatus('disconnected', '📱', 'Modo Local');
+            notify('🔌 Desconectado - Modo local');
+        }
+
+        function updateSyncStatus(status, icon, text) {
+            const statusEl = document.getElementById('syncStatus');
+            const iconEl = document.getElementById('syncIcon');
+            const textEl = document.getElementById('syncText');
+            
+            statusEl.className = `sync-status ${status}`;
+            iconEl.textContent = icon;
+            textEl.textContent = text;
+        }
+
+        // ===== FUNCIONES DE GUARDADO =====
+        
+        function saveData() {
+            try {
+                localStorage.setItem('controlEficienciaData', JSON.stringify(data));
+            } catch (error) {
+                console.error('Error guardando localmente:', error);
+            }
+        }
+
+        function loadData() {
+            try {
+                const savedData = localStorage.getItem('controlEficienciaData');
+                if (savedData) {
+                    data = { ...data, ...JSON.parse(savedData) };
+                    
+                    for (let id = 1; id <= 3; id++) {
+                        restoreProductState(id);
+                    }
+                    updateSummary();
+                }
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+            }
+        }
+
+        function restoreProductState(id) {
+            const item = data[id];
+            
+            if (item.name) {
+                document.getElementById('title' + id).textContent = item.name;
+            }
+            
+            if (item.image) {
+                const icon = document.getElementById('icon' + id);
+                const img = document.getElementById('image' + id);
+                icon.style.display = 'none';
+                img.src = item.image;
+                img.style.display = 'block';
+            }
+            
+            if (item.set) {
+                document.getElementById('initialSection' + id).style.display = 'none';
+                document.getElementById('productionSection' + id).style.display = 'block';
+            }
+            
+            updateDisplay(id);
+        }
+
+        // ===== FUNCIONES DE CONTROL =====
+
+        function resetAllData() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los datos? Esta acción no se puede deshacer.')) {
+                // Reset datos
+                data = {
+                    1: { name: 'Producto A', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
+                    2: { name: 'Producto B', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null },
+                    3: { name: 'Producto C', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0, image: null }
+                };
+                
+                if (isConnected) {
+                    saveToCloud();
+                } else {
+                    saveData();
+                }
+                
+                location.reload();
+            }
+        }
+
+        function exportData() {
+            try {
+                const dataToExport = {
+                    data: data,
+                    exportDate: new Date().toISOString(),
+                    room: currentRoom,
+                    version: '2.0'
+                };
+                
+                const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
+                    type: 'application/json'
+                });
+                
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `control-eficiencia-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                notify('💾 Datos exportados correctamente');
+            } catch (error) {
+                notify('❌ Error al exportar datos');
+            }
+        }
+
+        function importData() {
+            const file = document.getElementById('importFile').files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    
+                    if (imported.data) {
+                        if (confirm('¿Importar estos datos? Se sobrescribirán los datos actuales.')) {
+                            data = { ...data, ...imported.data };
+                            
+                            if (isConnected) {
+                                saveToCloud();
+                            } else {
+                                saveData();
+                            }
+                            
+                            for (let id = 1; id <= 3; id++) {
+                                restoreProductState(id);
+                            }
+                            
+                            updateSummary();
+                            notify('✅ Datos importados correctamente');
+                        }
+                    } else {
+                        notify('❌ Archivo no válido');
+                    }
+                } catch (error) {
+                    notify('❌ Error al leer el archivo');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // ===== FUNCIONES PRINCIPALES =====
+
+        function setStock(id) {
+            const val = parseInt(document.getElementById('initial' + id).value) || 0;
+            if (val <= 0) {
+                notify('⚠️ Ingresa un valor válido mayor a 0');
+                return;
+            }
+            
+            data[id].stock = val;
+            data[id].set = true;
+            
+            document.getElementById('initialSection' + id).style.display = 'none';
+            document.getElementById('productionSection' + id).style.display = 'block';
+            
+            updateDisplay(id);
+            updateSummary();
+            
+            if (isConnected) {
+                saveToCloud();
+            } else {
+                saveData();
+            }
+            
+            notify('✅ Stock inicial establecido: ' + val);
+        }
+
+        function registerProd(id) {
+            const prod = parseInt(document.getElementById('produced' + id).value) || 0;
+            const used = parseInt(document.getElementById('used' + id).value) || 0;
+            
+            if (used <= 0) {
+                notify('⚠️ Debes usar al menos 1 unidad');
+                return;
+            }
+            
+            if (prod < 0) {
+                notify('⚠️ Las unidades buenas no pueden ser negativas');
+                return;
+            }
+            
+            if (prod > used) {
+                notify('⚠️ No puedes producir más unidades buenas que las utilizadas');
+                return;
+            }
+            
+            if (used > data[id].stock) {
+                notify('❌ Stock insuficiente. Disponible: ' + data[id].stock);
+                return;
+            }
+            
+            // Solo restar las unidades utilizadas del stock
+            data[id].stock = data[id].stock - used;
+            data[id].totalProd += prod;
+            data[id].totalUsed += used;
+            data[id].sessions += 1;
+            data[id].todayProd += prod;
+            data[id].todayUsed += used;
+            
+            document.getElementById('produced' + id).value = '';
+            document.getElementById('used' + id).value = '';
+            
+            updateDisplay(id);
+            updateSummary();
+            
+            if (isConnected) {
+                saveToCloud();
+            } else {
+                saveData();
+            }
+            
+            notify('✅ Registrado: ' + prod + ' buenas de ' + used + ' utilizadas');
+        }
+
+        function addStock(id) {
+            const val = parseInt(document.getElementById('add' + id).value) || 0;
+            if (val <= 0) {
+                notify('⚠️ Ingresa un valor válido mayor a 0');
+                return;
+            }
+            
+            data[id].stock += val;
+            document.getElementById('add' + id).value = '';
+            
+            updateDisplay(id);
+            updateSummary();
+            
+            if (isConnected) {
+                saveToCloud();
+            } else {
+                saveData();
+            }
+            
+            notify('✅ Añadido: +' + val + ' unidades al stock');
+        }
+
+        function updateDisplay(id) {
+            const item = data[id];
+            const eff = item.totalUsed > 0 ? ((item.totalProd / item.totalUsed) * 100) : 0;
+            
+            document.getElementById('stock' + id).textContent = item.stock;
+            document.getElementById('todayProd' + id).textContent = item.todayProd;
+            document.getElementById('todayUsed' + id).textContent = item.todayUsed;
+            document.getElementById('sessions' + id).textContent = item.sessions;
+            document.getElementById('efficiency' + id).textContent = eff.toFixed(1) + '%';
+            document.getElementById('effBar' + id).style.width = Math.min(eff, 100) + '%';
+        }
+
+        function updateSummary() {
+            const totalStock = Object.values(data).reduce((sum, p) => sum + p.stock, 0);
+            const totalUsed = Object.values(data).reduce((sum, p) => sum + p.totalUsed, 0);
+            const totalProd = Object.values(data).reduce((sum, p) => sum + p.totalProd, 0);
+            const avgEff = totalUsed > 0 ? ((totalProd / totalUsed) * 100) : 0;
+            
+            document.getElementById('totalStock').textContent = totalStock;
+            document.getElementById('totalUsed').textContent = totalUsed;
+            document.getElementById('avgEfficiency').textContent = avgEff.toFixed(1) + '%';
+        }
+
+        function editTitle(id) {
+            const titleEl = document.getElementById('title' + id);
+            const inputEl = document.getElementById('titleInput' + id);
+            
+            titleEl.style.display = 'none';
+            inputEl.style.display = 'block';
+            inputEl.value = data[id].name;
+            inputEl.focus();
+            inputEl.select();
+        }
+
+        function saveTitle(id) {
+            const titleEl = document.getElementById('title' + id);
+            const inputEl = document.getElementById('titleInput' + id);
+            const newName = inputEl.value.trim();
+
+            if (newName && newName !== data[id].name) {
+                data[id].name = newName;
+                titleEl.textContent = newName;
+                
+                if (isConnected) {
+                    saveToCloud();
+                } else {
+                    saveData();
+                }
+                
+                notify('✅ Nombre actualizado: ' + newName);
+            }
+
+            inputEl.style.display = 'none';
+            titleEl.style.display = 'block';
+        }
+
+        function handleKeypress(event, id) {
+            if (event.key === 'Enter') {
+                saveTitle(id);
+            } else if (event.key === 'Escape') {
+                document.getElementById('titleInput' + id).style.display = 'none';
+                document.getElementById('title' + id).style.display = 'block';
+            }
+        }
+
+        function openImageModal(id) {
+            currentProduct = id;
+            document.getElementById('imageModal').style.display = 'flex';
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('saveImageBtn').disabled = true;
+            document.getElementById('imageInput').value = '';
+        }
+
+        function closeImageModal() {
+            document.getElementById('imageModal').style.display = 'none';
+            currentProduct = null;
+        }
+
+        function previewImage() {
+            const file = document.getElementById('imageInput').files[0];
+            const preview = document.getElementById('imagePreview');
+            const saveBtn = document.getElementById('saveImageBtn');
+
+            if (file) {
+                if (file.size > 5 * 1024 * 1024) {
+                    notify('❌ Imagen muy grande (máximo 5MB)');
+                    return;
+                }
+
+                if (!file.type.startsWith('image/')) {
+                    notify('❌ Selecciona una imagen válida');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    saveBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function saveImage() {
+            if (!currentProduct) return;
+
+            const preview = document.getElementById('imagePreview');
+            const icon = document.getElementById('icon' + currentProduct);
+            const img = document.getElementById('image' + currentProduct);
+
+            if (preview.src) {
+                data[currentProduct].image = preview.src;
+                
+                icon.style.display = 'none';
+                img.src = preview.src;
+                img.style.display = 'block';
+
+                if (isConnected) {
+                    saveToCloud();
+                } else {
+                    saveData();
+                }
+                
+                closeImageModal();
+                notify('✅ Imagen actualizada correctamente');
+            }
+        }
+
+        function notify(msg) {
+            const notification = document.getElementById('notification');
+            notification.textContent = msg;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // ===== INICIALIZACIÓN =====
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Cargar datos locales
+            loadData();
+            updateSummary();
+            
+            // Intentar reconectar a sala guardada
+            const savedRoom = localStorage.getItem('currentRoom');
+            if (savedRoom) {
+                document.getElementById('roomId').value = savedRoom;
+                connectToRoom();
+            }
+            
+            // Eventos del modal
+            document.getElementById('imageModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeImageModal();
+                }
+            });
+            
+            // Eventos de teclado
+            for (let i = 1; i <= 3; i++) {
+                const initialInput = document.getElementById('initial' + i);
+                if (initialInput) {
+                    initialInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            setStock(i);
+                        }
+                    });
+                }
+                
+                const prodInput = document.getElementById('produced' + i);
+                const usedInput = document.getElementById('used' + i);
+                if (prodInput && usedInput) {
+                    prodInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            usedInput.focus();
+                        }
+                    });
+                    usedInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            registerProd(i);
+                        }
+                    });
+                }
+                
+                const addInput = document.getElementById('add' + i);
+                if (addInput) {
+                    addInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            addStock(i);
+                        }
+                    });
+                }
+            }
+            
+            // Validación de inputs numéricos
+            const numberInputs = document.querySelectorAll('input[type="number"]');
+            numberInputs.forEach(input => {
+                input.addEventListener('input', function() {
+                    if (this.value < 0) {
+                        this.value = 0;
+                    }
+                });
+            });
+            
+            // Enter en input de sala
+            document.getElementById('roomId').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    connectToRoom();
+                }
+            });
+            
+            notify('🎉 Sistema de Control de Eficiencia listo');
+        });
+    </script>
+</body>
+</html>
