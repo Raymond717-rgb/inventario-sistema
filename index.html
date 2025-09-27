@@ -673,7 +673,8 @@
                 return;
             }
             
-            data[id].stock = data[id].stock - used + prod;
+            // CORRECCIÓN: Solo restar las unidades utilizadas del stock
+            data[id].stock = data[id].stock - used;
             data[id].totalProd += prod;
             data[id].totalUsed += used;
             data[id].sessions += 1;
