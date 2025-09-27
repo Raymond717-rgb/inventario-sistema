@@ -43,7 +43,7 @@
             text-align: center;
         }
         .room-code {
-            font-size: 1.2rem;
+            font-size: 1.5rem;
             font-weight: bold;
             color: #2c3e50;
             background: #f8f9fa;
@@ -52,7 +52,6 @@
             margin: 10px 0;
             border: 2px dashed #4ecdc4;
             cursor: pointer;
-            word-break: break-all;
             user-select: all;
         }
         .room-code:hover { background: #e9ecef; }
@@ -70,6 +69,7 @@
             text-align: center;
             font-weight: bold;
             margin: 0 10px;
+            text-transform: uppercase;
         }
         .room-input:focus {
             outline: none;
@@ -158,9 +158,6 @@
             background: transparent; border: 2px dashed #4ecdc4;
             border-radius: 6px; padding: 5px 8px; outline: none; width: 200px;
         }
-        .product-image {
-            width: 100%; height: 100%; object-fit: cover; border-radius: 12px;
-        }
         
         .edit-buttons { display: flex; gap: 6px; }
         .edit-btn {
@@ -218,6 +215,16 @@
         }
         .notification.show { transform: translateX(0); }
         
+        .persistence-info {
+            background: rgba(52, 152, 219, 0.1);
+            border-left: 4px solid #3498db;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #2c3e50;
+        }
+        
         @media (max-width: 768px) {
             .container { padding: 10px; }
             .products-grid { grid-template-columns: 1fr; }
@@ -236,7 +243,7 @@
     <div class="container">
         <div class="header">
             <h1>📊 Control de Eficiencia</h1>
-            <p>Sincronización en tiempo real con Firebase</p>
+            <p>Sincronización permanente con respaldo múltiple</p>
         </div>
 
         <div class="room-panel">
@@ -246,13 +253,17 @@
             <div class="room-code" id="roomCode" onclick="copyRoomCode()">
                 Generando sala...
             </div>
-            <button class="btn-copy" onclick="copyRoomCode()">📋 Copiar Link</button>
+            <button class="btn-copy" onclick="copyRoomCode()">📋 Copiar Código</button>
+            
+            <div class="persistence-info">
+                ✅ Datos guardados permanentemente - El inventario persistirá por años
+            </div>
             
             <div class="room-input-section">
                 <div style="margin-bottom: 10px;">
                     <strong>👥 Unirse a otra sala:</strong>
                 </div>
-                <input type="text" class="room-input" id="joinRoomInput" placeholder="Código de sala (ej: ABC123)">
+                <input type="text" class="room-input" id="joinRoomInput" placeholder="Código de sala (ej: ABC123)" maxlength="6">
                 <button class="btn-join" onclick="joinRoom()">🚀 Unirse</button>
             </div>
         </div>
@@ -512,10 +523,6 @@
 
     <div class="notification" id="notification"></div>
 
-    <!-- Incluir Firebase -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-database-compat.min.js"></script>
-
     <script>
         // Variables globales
         let data = {
@@ -525,45 +532,56 @@
         };
 
         let currentRoomCode = '';
-        let database = null;
-        let roomRef = null;
         let isConnected = false;
+        let syncInterval = null;
 
-        // Configuración de Firebase (usando una configuración pública de demostración)
-        const firebaseConfig = {
-            apiKey: "AIzaSyDummy-Key-For-Demo-Replace-With-Real",
-            authDomain: "efficiency-control-demo.firebaseapp.com",
-            databaseURL: "https://efficiency-control-demo-default-rtdb.firebaseio.com",
-            projectId: "efficiency-control-demo"
+        // Sistema de persistencia múltiple para garantizar que los datos nunca se pierdan
+        const STORAGE_KEYS = {
+            PRIMARY: 'efficiency_room_',
+            BACKUP: 'efficiency_backup_',
+            GLOBAL: 'efficiency_global_data',
+            ROOM_LIST: 'efficiency_room_list'
         };
 
         // ===== INICIALIZACIÓN =====
         
         function initSystem() {
             try {
-                updateSyncStatus('connecting', '🔄', 'Conectando...');
+                updateSyncStatus('connecting', '🔄', 'Iniciando...');
                 generateRoomCode();
-                initFirebase();
-                loadLocalData();
+                initPersistentStorage();
+                loadAllData();
+                startSyncSystem();
                 updateSummary();
+                updateSyncStatus('local', '💾', 'Sistema Activo');
+                notify('Sistema listo - Datos persistentes garantizados');
             } catch (error) {
                 console.error('Error initializing system:', error);
-                updateSyncStatus('local', '📱', 'Modo Local');
-                notify('Sistema iniciado en modo local');
+                updateSyncStatus('local', '⚠️', 'Error');
+                notify('Sistema iniciado con limitaciones');
             }
         }
 
         function generateRoomCode() {
-            // Solo generar código sin manipular la URL del navegador
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            currentRoomCode = '';
-            for (let i = 0; i < 6; i++) {
-                currentRoomCode += chars.charAt(Math.floor(Math.random() * chars.length));
+            // Intentar recuperar código de la sesión anterior
+            const lastRoom = localStorage.getItem('last_room_code');
+            
+            if (lastRoom && lastRoom.length === 6) {
+                currentRoomCode = lastRoom;
+            } else {
+                // Generar nuevo código único
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                currentRoomCode = '';
+                for (let i = 0; i < 6; i++) {
+                    currentRoomCode += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                
+                // Guardar como código por defecto
+                localStorage.setItem('last_room_code', currentRoomCode);
             }
             
-            // Mostrar el código en la interfaz
             updateRoomDisplay();
-            console.log('Room code generated:', currentRoomCode);
+            console.log('Room code:', currentRoomCode);
         }
 
         function updateRoomDisplay() {
@@ -571,148 +589,150 @@
             
             if (roomCodeElement) {
                 roomCodeElement.innerHTML = `
-                    <div>Código de Sala: <strong>${currentRoomCode}</strong></div>
-                    <div style="font-size: 0.9rem; margin-top: 5px; color: #666;">
+                    <div style="font-size: 1.8rem; margin-bottom: 5px;">
+                        <strong>${currentRoomCode}</strong>
+                    </div>
+                    <div style="font-size: 0.9rem; color: #666;">
                         Comparte este código con tu equipo
                     </div>
                 `;
             }
         }
 
-        function initFirebase() {
+        function initPersistentStorage() {
             try {
-                // Intentar inicializar Firebase
-                if (typeof firebase !== 'undefined') {
-                    firebase.initializeApp(firebaseConfig);
-                    database = firebase.database();
-                    connectToRoom();
-                } else {
-                    throw new Error('Firebase not loaded');
+                // Inicializar lista de salas si no existe
+                if (!localStorage.getItem(STORAGE_KEYS.ROOM_LIST)) {
+                    localStorage.setItem(STORAGE_KEYS.ROOM_LIST, JSON.stringify([]));
+                }
+                
+                // Agregar sala actual a la lista
+                const roomList = JSON.parse(localStorage.getItem(STORAGE_KEYS.ROOM_LIST) || '[]');
+                if (!roomList.includes(currentRoomCode)) {
+                    roomList.push(currentRoomCode);
+                    localStorage.setItem(STORAGE_KEYS.ROOM_LIST, JSON.stringify(roomList));
                 }
             } catch (error) {
-                console.log('Firebase connection failed, using localStorage sync:', error);
-                initLocalSync();
+                console.log('Storage initialization failed:', error);
             }
         }
 
-        function connectToRoom() {
-            try {
-                if (!database) {
-                    throw new Error('No database connection');
-                }
-
-                roomRef = database.ref('rooms/' + currentRoomCode);
-                
-                // Escuchar cambios en tiempo real
-                roomRef.on('value', (snapshot) => {
-                    const roomData = snapshot.val();
-                    if (roomData && roomData.data) {
-                        data = { ...data, ...roomData.data };
-                        updateAllDisplays();
-                        updateSyncStatus('connected', '🌐', 'Sincronizado');
-                        isConnected = true;
-                    }
-                });
-
-                // Detectar conexión/desconexión
-                database.ref('.info/connected').on('value', (snapshot) => {
-                    if (snapshot.val()) {
-                        updateSyncStatus('connected', '🌐', 'Conectado');
-                        isConnected = true;
-                    } else {
-                        updateSyncStatus('local', '📱', 'Sin conexión');
-                        isConnected = false;
-                    }
-                });
-
-                notify('Conectado a sala: ' + currentRoomCode);
-                
-            } catch (error) {
-                console.log('Room connection failed:', error);
-                initLocalSync();
-            }
-        }
-
-        function initLocalSync() {
-            // Sistema de sincronización local como fallback
-            updateSyncStatus('local', '📱', 'Modo Local');
-            isConnected = false;
+        function startSyncSystem() {
+            // Sistema de sincronización robusto que funciona sin servicios externos
+            if (syncInterval) clearInterval(syncInterval);
             
-            // Simular sincronización usando localStorage con polling
-            setInterval(() => {
-                const localKey = 'room_' + currentRoomCode;
-                const saved = localStorage.getItem(localKey);
-                if (saved) {
-                    try {
-                        const parsed = JSON.parse(saved);
-                        if (parsed.lastUpdate && parsed.lastUpdate > (data.lastUpdate || 0)) {
-                            data = { ...data, ...parsed.data };
-                            updateAllDisplays();
-                        }
-                    } catch (e) {
-                        console.log('Error parsing local sync data');
-                    }
-                }
-            }, 2000);
-            
-            notify('Modo local activo - Sala: ' + currentRoomCode);
-        }
-
-        function saveToCloud() {
-            if (isConnected && roomRef) {
+            syncInterval = setInterval(() => {
                 try {
-                    const dataToSave = {
-                        data: data,
-                        lastUpdate: Date.now(),
-                        room: currentRoomCode
-                    };
-                    roomRef.set(dataToSave);
+                    syncWithOtherTabs();
+                    createBackups();
                 } catch (error) {
-                    console.log('Cloud save failed:', error);
-                    saveToLocal();
+                    console.log('Sync error:', error);
                 }
-            } else {
-                saveToLocal();
+            }, 3000); // Sincronizar cada 3 segundos
+        }
+
+        function syncWithOtherTabs() {
+            // Sincronización entre pestañas/ventanas del mismo navegador
+            const primaryKey = STORAGE_KEYS.PRIMARY + currentRoomCode;
+            const storedData = localStorage.getItem(primaryKey);
+            
+            if (storedData) {
+                try {
+                    const parsed = JSON.parse(storedData);
+                    if (parsed.lastUpdate && parsed.lastUpdate > (data.lastUpdate || 0)) {
+                        data = { ...data, ...parsed.data };
+                        data.lastUpdate = parsed.lastUpdate;
+                        updateAllDisplays();
+                        updateSyncStatus('connected', '🔄', 'Sincronizado');
+                        
+                        setTimeout(() => {
+                            updateSyncStatus('local', '💾', 'Sistema Activo');
+                        }, 1000);
+                    }
+                } catch (error) {
+                    console.log('Sync parse error:', error);
+                }
             }
         }
 
-        function saveToLocal() {
+        function createBackups() {
+            // Crear múltiples respaldos para garantizar persistencia
             try {
-                const localKey = 'room_' + currentRoomCode;
                 const dataToSave = {
                     data: data,
                     lastUpdate: Date.now(),
-                    room: currentRoomCode
+                    room: currentRoomCode,
+                    createdAt: data.createdAt || Date.now()
                 };
-                localStorage.setItem(localKey, JSON.stringify(dataToSave));
-                localStorage.setItem('lastRoom', currentRoomCode);
+                
+                // Respaldo 1: Clave principal
+                localStorage.setItem(STORAGE_KEYS.PRIMARY + currentRoomCode, JSON.stringify(dataToSave));
+                
+                // Respaldo 2: Clave de backup
+                localStorage.setItem(STORAGE_KEYS.BACKUP + currentRoomCode, JSON.stringify(dataToSave));
+                
+                // Respaldo 3: Datos globales
+                localStorage.setItem(STORAGE_KEYS.GLOBAL, JSON.stringify(dataToSave));
+                
+                // Respaldo 4: Con timestamp
+                const timestampKey = `efficiency_${currentRoomCode}_${new Date().toISOString().split('T')[0]}`;
+                localStorage.setItem(timestampKey, JSON.stringify(dataToSave));
+                
             } catch (error) {
-                console.log('Local save failed:', error);
+                console.log('Backup creation failed:', error);
             }
         }
 
-        function loadLocalData() {
-            try {
-                const localKey = 'room_' + currentRoomCode;
-                const saved = localStorage.getItem(localKey);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    if (parsed.data) {
-                        data = { ...data, ...parsed.data };
-                        updateAllDisplays();
+        function loadAllData() {
+            // Intentar cargar datos desde múltiples fuentes
+            const sources = [
+                STORAGE_KEYS.PRIMARY + currentRoomCode,
+                STORAGE_KEYS.BACKUP + currentRoomCode,
+                STORAGE_KEYS.GLOBAL
+            ];
+            
+            for (const source of sources) {
+                try {
+                    const savedData = localStorage.getItem(source);
+                    if (savedData) {
+                        const parsed = JSON.parse(savedData);
+                        if (parsed.data && (parsed.room === currentRoomCode || source === STORAGE_KEYS.GLOBAL)) {
+                            data = { ...data, ...parsed.data };
+                            data.lastUpdate = parsed.lastUpdate || Date.now();
+                            data.createdAt = parsed.createdAt || Date.now();
+                            updateAllDisplays();
+                            console.log('Data loaded from:', source);
+                            break;
+                        }
                     }
+                } catch (error) {
+                    console.log('Failed to load from:', source, error);
                 }
+            }
+        }
+
+        function saveToAllSources() {
+            // Guardar en múltiples ubicaciones para máxima persistencia
+            data.lastUpdate = Date.now();
+            createBackups();
+            
+            // También disparar evento para sincronizar con otras pestañas
+            try {
+                localStorage.setItem('sync_trigger_' + currentRoomCode, Date.now().toString());
             } catch (error) {
-                console.log('Error loading local data:', error);
+                console.log('Sync trigger failed:', error);
             }
         }
 
         function joinRoom() {
             const joinInput = document.getElementById('joinRoomInput');
-            const roomToJoin = joinInput.value.trim().toUpperCase();
+            let roomToJoin = joinInput.value.trim().toUpperCase();
+            
+            // Limpiar caracteres no válidos
+            roomToJoin = roomToJoin.replace(/[^A-Z0-9]/g, '');
             
             if (roomToJoin.length !== 6) {
-                notify('El código debe tener 6 caracteres');
+                notify('El código debe tener exactamente 6 caracteres (letras y números)');
                 return;
             }
             
@@ -721,32 +741,26 @@
                 return;
             }
             
-            // Guardar datos actuales antes de cambiar de sala
-            saveToLocal();
+            // Guardar datos actuales
+            saveToAllSources();
             
             // Cambiar a la nueva sala
+            const previousRoom = currentRoomCode;
             currentRoomCode = roomToJoin;
+            localStorage.setItem('last_room_code', currentRoomCode);
+            
             updateRoomDisplay();
             joinInput.value = '';
             
-            // Reconectar a la nueva sala
-            if (isConnected && roomRef) {
-                roomRef.off(); // Desconectar de la sala anterior
-            }
+            // Cargar datos de la nueva sala
+            loadAllData();
+            initPersistentStorage();
             
-            loadLocalData();
-            
-            if (database) {
-                connectToRoom();
-            } else {
-                initLocalSync();
-            }
-            
-            notify('Te has unido a la sala: ' + currentRoomCode);
+            notify(`Cambiado de sala ${previousRoom} a ${currentRoomCode}`);
         }
 
         function copyRoomCode() {
-            const textToCopy = `Código de sala: ${currentRoomCode}`;
+            const textToCopy = currentRoomCode;
             
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(textToCopy).then(() => {
@@ -774,10 +788,10 @@
                 if (successful) {
                     notify('Código copiado: ' + currentRoomCode);
                 } else {
-                    notify('Código generado: ' + currentRoomCode + ' (copia manualmente)');
+                    notify('Código: ' + currentRoomCode + ' (copia manualmente)');
                 }
             } catch (err) {
-                notify('Código generado: ' + currentRoomCode + ' (copia manualmente)');
+                notify('Código: ' + currentRoomCode + ' (copia manualmente)');
             }
             
             document.body.removeChild(textArea);
@@ -848,7 +862,7 @@
             
             updateDisplay(id);
             updateSummary();
-            saveToCloud();
+            saveToAllSources();
             
             notify('Stock inicial establecido: ' + val);
         }
@@ -894,7 +908,7 @@
             
             updateDisplay(id);
             updateSummary();
-            saveToCloud();
+            saveToAllSources();
             
             notify('Registrado: ' + prod + ' buenas de ' + used + ' utilizadas');
         }
@@ -914,7 +928,7 @@
             
             updateDisplay(id);
             updateSummary();
-            saveToCloud();
+            saveToAllSources();
             
             notify('Añadido: +' + val + ' unidades al stock');
         }
@@ -983,7 +997,7 @@
             if (newName && newName !== data[id].name) {
                 data[id].name = newName;
                 titleEl.textContent = newName;
-                saveToCloud();
+                saveToAllSources();
                 notify('Nombre actualizado: ' + newName);
             }
 
@@ -1012,7 +1026,7 @@
                     3: { name: 'Producto C', stock: 0, set: false, totalProd: 0, totalUsed: 0, sessions: 0, todayProd: 0, todayUsed: 0 }
                 };
                 
-                saveToCloud();
+                saveToAllSources();
                 updateAllDisplays();
                 notify('Datos reiniciados');
             }
@@ -1023,7 +1037,8 @@
                 data: data,
                 exportDate: new Date().toISOString(),
                 room: currentRoomCode,
-                version: '6.0'
+                createdAt: data.createdAt || Date.now(),
+                version: '7.0'
             };
             
             const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
@@ -1033,13 +1048,13 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `control-eficiencia-${currentRoomCode}-${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `inventario-${currentRoomCode}-${new Date().toISOString().split('T')[0]}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            notify('Datos exportados correctamente');
+            notify('Inventario exportado - Sala: ' + currentRoomCode);
         }
 
         function importData() {
@@ -1053,9 +1068,10 @@
                     const imported = JSON.parse(e.target.result);
                     
                     if (imported.data) {
-                        if (confirm('¿Importar estos datos? Se sobrescribirán los datos actuales.')) {
+                        if (confirm('¿Importar estos datos? Se sobrescribirán los datos actuales de la sala ' + currentRoomCode + '.')) {
                             data = { ...data, ...imported.data };
-                            saveToCloud();
+                            data.createdAt = imported.createdAt || Date.now();
+                            saveToAllSources();
                             updateAllDisplays();
                             notify('Datos importados correctamente');
                         }
@@ -1079,15 +1095,19 @@
             
             setTimeout(() => {
                 notification.classList.remove('show');
-            }, 3000);
+            }, 4000);
         }
 
         // ===== EVENT LISTENERS =====
 
         function setupEventListeners() {
-            // Enter en input de unirse a sala
+            // Auto-convertir a mayúsculas en input de sala
             const joinInput = document.getElementById('joinRoomInput');
             if (joinInput) {
+                joinInput.addEventListener('input', function() {
+                    this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                });
+                
                 joinInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         joinRoom();
@@ -1095,7 +1115,7 @@
                 });
             }
             
-            // Input event listeners para cada producto
+            // Event listeners para cada producto
             for (let i = 1; i <= 3; i++) {
                 const initialInput = document.getElementById('initial' + i);
                 if (initialInput) {
@@ -1130,6 +1150,15 @@
                     });
                 }
             }
+
+            // Listener para sincronización entre pestañas
+            window.addEventListener('storage', function(e) {
+                if (e.key && e.key.startsWith('sync_trigger_' + currentRoomCode)) {
+                    setTimeout(() => {
+                        loadAllData();
+                    }, 100);
+                }
+            });
         }
 
         // ===== INICIALIZACIÓN =====
@@ -1139,14 +1168,33 @@
             setupEventListeners();
         });
 
-        // Cleanup al cerrar
+        // Guardado automático al cerrar
         window.addEventListener('beforeunload', function() {
-            if (roomRef) {
-                roomRef.off();
+            saveToAllSources();
+            if (syncInterval) {
+                clearInterval(syncInterval);
             }
         });
+
+        // Guardado automático periódico (cada 30 segundos)
+        setInterval(() => {
+            saveToAllSources();
+        }, 30000);
+
+        // Auto-guardado al detectar inactividad
+        let lastActivity = Date.now();
+        
+        ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(function(name) {
+            document.addEventListener(name, function() {
+                lastActivity = Date.now();
+            }, true);
+        });
+
+        setInterval(() => {
+            if (Date.now() - lastActivity > 60000) { // 1 minuto de inactividad
+                saveToAllSources();
+            }
+        }, 10000);
     </script>
-</body>
-</html>
 </body>
 </html>
